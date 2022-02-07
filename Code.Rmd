@@ -1,0 +1,975 @@
+---
+title: "Cyclistic bike-share analysis case study by Dr. Vipul Gohel"
+output:
+  html_document:
+    df_print: paged
+---
+
+#### Introduction and Study Objective
+This is the capstone project part of the Google Analytical Certificate Course.
+
+#### Ask
+The case study is to Study the pattern of annual member and non-member riders to define the marketing strategy of bringing the non-member into the member program.
+
+The following three questions would help in directing the future marketing Program.
+
+1. How do annual members and casual riders use Cyclistic bikes differently?
+2. Why would casual riders buy Cyclistic annual memberships?
+3. How can Cyclistic use digital media to influence casual riders to become members?
+Tool followed:- Excel(Power-Pivot & Power Query), R,
+
+#### Prepare
+Data set obtained from the link Data set from Quarter # 2 of 2019 to Quarter # 1 of 2020 were downloaded from the link and stored on the local desktop.
+
+#### Process
+Following steps were performed in the R platform, and the final file was extracted for final analysis
+
+1. Made the columns’ name uniform across the file
+2. Before merging the files, remove any extra columns that are not common to all files.
+3. Merge the column into one file using the full outer join Rename the row from Subscriber/member to Member and Customer / casual to Non-Member
+4. Identified the outliers and recorded outliers in a separate column as “Outliers.”
+5. Extracted the file as CSV, and the same file was used for the analysis The file was ready to use for the analysis.
+
+#### Pre-Data analysis
+
+we created the following columns
+
+Ride Length in Minutes – This was done by subtracting the ride’s start time from to end time.
+
+1. Weekday – calculated from the start time column
+2. Day name – calculated from the start time column
+3. Day number – calculated from the start time column
+4. Yea-Month-Quarter - calculated from the start time column
+55. Similar way Month number, month name and quarters were created
+
+```{r}
+# Load Required Library
+require(tidyverse)
+require(lubridate)
+require(dplyr)
+require(here)
+require(skimr)
+require(janitor)
+require(hablar)
+require(gapminder)
+require(scales)
+require(ggrepel)
+require(dplyr)
+options(warn=-1)
+```
+
+#### Load the data files
+```{r}
+divvy_tips_2019_Q2<-read.csv("Divvy_Trips_2019_Q2.csv")
+divvy_tips_2019_Q3<-read.csv("Divvy_Trips_2019_Q3.csv")
+divvy_tips_2019_Q4<-read.csv("Divvy_Trips_2019_Q4.csv")
+divvy_tips_2020_Q1<-read.csv("Divvy_Trips_2020_Q1.csv")
+```
+
+#### Understanding about the Data
+
+```{r}
+# Review the columns name in each given datasets
+colnames(divvy_tips_2019_Q2)
+colnames(divvy_tips_2019_Q3)
+colnames(divvy_tips_2019_Q4)
+colnames(divvy_tips_2020_Q1)
+```
+Each column names and column position need to be uniform across the file before joining the datasets from 2019-Q2 to 2020-Q1
+```{r}
+divvy_tips_2019_Q2<-divvy_tips_2019_Q2 %>% 
+  rename(Rental_ID=X01...Rental.Details.Rental.ID,
+         From_Start_Date_Time=X01...Rental.Details.Local.Start.Time,
+         To_End_Date_Time=X01...Rental.Details.Local.End.Time,
+         Rental_Bike_ID=X01...Rental.Details.Bike.ID,
+         Rental_Duration_Second=X01...Rental.Details.Duration.In.Seconds.Uncapped,
+         Start_Station_ID=X03...Rental.Start.Station.ID,
+         Start_Station_Name=X03...Rental.Start.Station.Name,
+         End_Station_ID=X02...Rental.End.Station.ID,
+         End_Station_Name=X02...Rental.End.Station.Name,
+         User_Type=User.Type,
+         Gender=Member.Gender,
+         Birth_Year=X05...Member.Details.Member.Birthday.Year)
+
+divvy_tips_2019_Q3<-divvy_tips_2019_Q3 %>% 
+  rename(Rental_ID=trip_id,
+         From_Start_Date_Time=start_time,
+         To_End_Date_Time=end_time,
+         Rental_Bike_ID=bikeid,
+         Rental_Duration_Second=tripduration,
+         Start_Station_ID=from_station_id,
+         Start_Station_Name=from_station_name,
+         End_Station_ID=to_station_id,
+         End_Station_Name=to_station_name,
+         User_Type=usertype,
+         Gender=gender,
+         Birth_Year=birthyear)
+
+divvy_tips_2019_Q4<-divvy_tips_2019_Q4 %>% 
+  rename(Rental_ID=trip_id,
+         From_Start_Date_Time=start_time,
+         To_End_Date_Time=end_time,
+         Rental_Bike_ID=bikeid,
+         Rental_Duration_Second=tripduration,
+         Start_Station_ID=from_station_id,
+         Start_Station_Name=from_station_name,
+         End_Station_ID=to_station_id,
+         End_Station_Name=to_station_name,
+         User_Type=usertype,
+         Gender=gender,
+         Birth_Year=birthyear)
+
+divvy_tips_2020_Q1<-divvy_tips_2020_Q1 %>% 
+  rename(Rental_ID=ride_id,
+         From_Start_Date_Time=started_at,
+         To_End_Date_Time=ended_at,
+         Start_Station_Name=start_station_name,
+         Start_Station_ID=start_station_id,
+         End_Station_Name=end_station_name,
+         End_Station_ID=end_station_id,
+         User_Type=member_casual)
+```
+
+```{r}
+# Remove the columns that are not required
+
+divvy_tips_2019_Q2<-divvy_tips_2019_Q2 %>%
+  select(-c(Rental_ID,Rental_Bike_ID,Rental_Duration_Second,
+            Gender, Birth_Year))
+
+divvy_tips_2019_Q3<-divvy_tips_2019_Q3 %>% 
+  select(-c(Rental_ID,Rental_Bike_ID,Rental_Duration_Second,
+            Gender,Birth_Year))
+
+divvy_tips_2019_Q4<-divvy_tips_2019_Q4 %>% 
+  select(-c(Rental_ID,Rental_Bike_ID,Rental_Duration_Second,
+            Gender,Birth_Year))
+
+divvy_tips_2020_Q1<-divvy_tips_2020_Q1 %>% 
+  select(c(From_Start_Date_Time,To_End_Date_Time,
+           Start_Station_ID,Start_Station_Name,End_Station_ID,
+           End_Station_Name,User_Type))
+```
+
+```{r}
+# Review the data structure of the given dataset
+str(divvy_tips_2019_Q2)
+str(divvy_tips_2019_Q3)
+str(divvy_tips_2019_Q4)
+str(divvy_tips_2020_Q1)
+```
+
+```{r}
+# Check Distinct User Type in each dataset
+unique(divvy_tips_2019_Q2$User_Type)
+unique(divvy_tips_2019_Q3$User_Type)
+unique(divvy_tips_2019_Q4$User_Type)
+unique(divvy_tips_2020_Q1$User_Type)
+```
+
+```{r}
+# Uniform Rows name across the dataset for User Type
+divvy_tips_2019_Q2$User_Type<-recode(divvy_tips_2019_Q2$User_Type,
+                                     "Subscriber" ="Member",
+                                     "Customer" ="Not Member")
+
+divvy_tips_2019_Q3$User_Type<-recode(divvy_tips_2019_Q3$User_Type,
+                                     "Subscriber" ="Member",
+                                     "Customer" ="Not Member")
+
+divvy_tips_2019_Q4$User_Type<-recode(divvy_tips_2019_Q4$User_Type,
+                                     "Subscriber" ="Member",
+                                     "Customer" ="Not Member")
+
+divvy_tips_2020_Q1$User_Type<-recode(divvy_tips_2020_Q1$User_Type,
+                                     "member" ="Member",
+                                     "casual" ="Not Member")
+```
+
+```{r}
+# Combine all four sets of dataset
+
+divvy_tips_2019_2020<-bind_rows(divvy_tips_2019_Q2,divvy_tips_2019_Q3,
+                                divvy_tips_2019_Q4,divvy_tips_2020_Q1)
+```
+
+```{r}
+# Review the User Type column after modification.
+# The member should now be two types only: 'Member' and 'Not Member'
+
+unique(divvy_tips_2019_2020$User_Type)
+```
+
+```{r}
+# Review the merged datasets
+
+print(str(divvy_tips_2019_2020))
+```
+
+```{r}
+# Formating the date columns from character to date and time
+
+divvy_tips_2019_2020$From_Start_Date_Time<-ymd_hms(divvy_tips_2019_2020$From_Start_Date_Time)
+
+divvy_tips_2019_2020$To_End_Date_Time<-ymd_hms(divvy_tips_2019_2020$To_End_Date_Time)
+```
+
+For data analysis, we created the new column, ride length in minutes, by subtracting the end time from the trip's start time.
+
+```{r}
+divvy_tips_2019_2020$Ride_Length_min<-
+as.numeric(as.character(difftime(divvy_tips_2019_2020$To_End_Date_Time,divvy_tips_2019_2020$From_Start_Date_Time)/60))
+```
+
+We removed the data whose ride length in minutes is less than zero. We used the filter command to consider those whose ride length in minutes is greater than zero.
+
+
+```{r}
+divvy_tips_2019_2020<-filter(divvy_tips_2019_2020, Ride_Length_min>0)
+head(divvy_tips_2019_2020)
+```
+
+Visualize the data using the box-pot to understand the distribution pattern and outliers.
+
+```{r}
+# Graph labeling
+graphM<-labs(title = "Data Distribution",
+             subtitle= "Comparision between members and non-members",
+             caption = "Data from 2019_Q2 to 2020_Q1",
+             x = "Member Type",
+             y ="Trip Length in Minutes")
+
+# Graph Themes
+graphTh<-theme(plot.title = element_text(size=18,face="bold"),
+               plot.subtitle = element_text(size=14),
+               plot.caption = element_text(size=8),
+               axis.title.x = element_text(size=12, face="bold"),
+               axis.title.y= element_text(size=12, face="bold"),
+               axis.text.x=element_text(size=8,face="bold"),
+               axis.text.y=element_text(size=8,face="bold"))
+
+# Box-Plot
+options(repr.plot.width=12, repr.plot.height=8)
+ggplot(data=divvy_tips_2019_2020)+ 
+  geom_boxplot(mapping = aes(x=User_Type,y=Ride_Length_min))+
+  scale_y_continuous(label = scales::comma)+ 
+  graphM + 
+  graphTh
+```
+
+For analysis purposes, we created the columns such as Day of Week, Day Name, Month Number, Month Name, hour, and year from the "From_Start_Date_Time" column.
+
+```{r}
+divvy_tips_2019_2020<- divvy_tips_2019_2020 %>%
+  mutate(Day_of_Week = wday(From_Start_Date_Time), 
+         Day_Name = wday(From_Start_Date_Time,label = TRUE, abbr = FALSE),
+         Month_Number=month(From_Start_Date_Time),
+         Month_Name =months(From_Start_Date_Time),
+         quarter_Number = quarters(From_Start_Date_Time),
+         Year = year(From_Start_Date_Time),
+         Hour= hour(From_Start_Date_Time))
+```
+
+Dataset has many outliers; we will analyze the percentage of outliers in each user type category.
+
+```{r}
+# Quartile one
+
+Q1<-divvy_tips_2019_2020 %>% 
+  group_by(User_Type) %>% 
+  summarize(Q1= quantile(Ride_Length_min,probs=0.25))
+
+Q1
+```
+
+```{r}
+# Quartile three
+
+Q3<-divvy_tips_2019_2020 %>% 
+  group_by(User_Type) %>% 
+  summarize(Q3= quantile(Ride_Length_min,probs=0.75))
+Q3
+```
+
+```{r}
+# Inter Quartile Range
+
+IQR<-divvy_tips_2019_2020 %>% 
+  group_by(User_Type) %>% 
+  summarize(IQR= quantile(Ride_Length_min,probs=0.75)-quantile(Ride_Length_min,probs=0.25))
+IQR
+```
+
+Apply these calculations to our dataset
+
+```{r}
+# Lower Bound 
+
+Lower_Bound<-divvy_tips_2019_2020 %>% 
+  group_by(User_Type) %>% 
+  summarize(Lower_Bound= quantile(Ride_Length_min,probs=0.25)-
+              1.5*(quantile(Ride_Length_min,probs=0.75)-quantile(Ride_Length_min,probs=0.25)))
+Lower_Bound
+```
+
+```{r}
+# Upper Bound 
+
+Upper_Bound<-divvy_tips_2019_2020 %>% 
+  group_by(User_Type) %>% 
+  summarize(Upper_Bound= quantile(Ride_Length_min,probs=0.75)+
+              1.5*(quantile(Ride_Length_min,probs=0.75)-quantile(Ride_Length_min,probs=0.25)))
+Upper_Bound
+```
+
+```{r}
+# Combine Lower and Upper Bound
+
+Outlier_prm<-cbind(Lower_Bound,Upper_Bound)
+Outlier_prm<-Outlier_prm %>% select(-3)
+Outlier_prm
+```
+
+```{r}
+# Data Merge with Orginal Dataset
+
+divvy_tips_2019_2020<- merge(divvy_tips_2019_2020,Outlier_prm, by ="User_Type", all=TRUE)
+```
+
+```{r}
+# Create Outliers column first as Ture and Flase
+
+divvy_tips_2019_2020$Outliers <- 
+  divvy_tips_2019_2020$Ride_Length_min<= divvy_tips_2019_2020$Lower_Bound | divvy_tips_2019_2020$Ride_Length_min>= divvy_tips_2019_2020$Upper_Bound
+```
+
+```{r}
+# Convert Ture and Flase into Yes and No
+
+divvy_tips_2019_2020$Outliers[divvy_tips_2019_2020$Outliers== TRUE]<- "Yes"
+divvy_tips_2019_2020$Outliers[divvy_tips_2019_2020$Outliers== FALSE]<- "No"
+```
+
+```{r}
+# Check Outliers column, and it should be only two values that is "Yes" and "No".
+
+unique(divvy_tips_2019_2020$Outliers)
+```
+
+Dataset has many outliers; we will analyze the percentage of outliers in each user type category.
+
+Data visualization to identify the outliers % within members and not members.
+
+```{r}
+# Graph labeling
+
+graphM1<-labs(title = "Percent Outliers observed",
+              subtitle= "Comparision between members and non-members",
+              caption = "Data from 2019_Q2 to 2020_Q1",
+              x = "Member Type",
+              y ="Number of Outliers (%)")
+
+# Graph Theme
+
+graphTh1<-theme(legend.title=element_text(size=8, face="bold"),
+                legend.text = element_text(size=8),
+                plot.title = element_text(size=18,face="bold"),
+                plot.subtitle = element_text(size=14),
+                plot.caption = element_text(size=10),
+                axis.title.x = element_text(size=10, face="bold"),
+                axis.title.y= element_text(size=10, face="bold"),
+                axis.text.x=element_text(size=8, face= 'bold'),
+                axis.text.y=element_text(size=8, face= 'bold'))
+
+# stacked bar chart
+
+options(repr.plot.width=10, repr.plot.height=8)
+divvy_tips_2019_2020 %>% 
+  count(User_Type,Outliers) %>% 
+  group_by(User_Type) %>% 
+  mutate(percnt=prop.table(n)*100) %>% 
+  ggplot(mapping=aes(User_Type, percnt, fill=Outliers,
+                     label = paste0(round(percnt,2), "%")))+
+  geom_bar(stat="identity")+
+  geom_text(position = position_stack(vjust = .5),
+            size= 5)+
+  graphM1 +
+  graphTh1
+```
+
+Total outliers from the members are 4.93%, while 8.19% are observed in the non-members.
+
+We will remove the outliers from "Member" and "Not Member". We will use the filter command to keep the dataset having the outliers marked as No.
+
+```{r}
+# Remove outliers
+
+divvy_tips_2019_2020<-filter(divvy_tips_2019_2020, Outliers =="No")
+```
+
+```{r}
+# review the columns name in the dataset
+colnames(divvy_tips_2019_2020)
+
+```
+
+#### Data Visualisations
+##### Trip Length in Weekdays
+
+```{r}
+## Trip Length in Weekdays
+
+# Graph labeling
+
+graphM2<- labs(title = "Trip Length in Weekdays",
+               subtitle= "Comparision between members and non-members",
+               caption = "Data from 2019_Q2 to 2020_Q1",
+               x = "Weekdays",
+               y ="Trip Length in Min",
+               fill="User Type")
+
+# Graph Theme
+
+graphTh2<-theme(legend.position=c(0.80,0.90))
+
+
+# Box plot Post removal of the Outliers 
+
+options(repr.plot.width=15, repr.plot.height=8)
+ggplot(data=divvy_tips_2019_2020,
+       mapping = aes(x=Day_Name,y=Ride_Length_min, fill=User_Type))+ 
+  geom_boxplot(outlier.shape = NA)+ 
+  stat_summary(fun=mean, geom = "point", size=2,
+               position=position_dodge(width=0.75), color="black")+
+  stat_summary(fun = mean, geom = "text", col = "black",    
+               vjust = -8.9, hjust=1.1,size=2,
+               aes(label = paste("AVG-", round(..y.., digits = 2))))+
+  graphM2+
+  graphTh1+
+  graphTh2
+```
+
+1. Mean trip length was lowered with members compared to non-members.
+2. Interestingly, the mean trip length was 3 minutes higher on the weekend with the non-members when the weekend data is compared with Monday to Friday data of the same group.
+3. There is no significant difference in mean trip value in minutes observed within members of weekdays data.
+
+##### Number of Trips in 24 hours
+
+```{r}
+# Graph labeling
+
+graphM3<- labs(title = "Number of Trips in 24 hours",
+               subtitle= "Comparision between members and non-members",
+               caption = "Data from 2019_Q2 to 2020_Q1",
+               x = "Hour",
+               y ="Number of Trips",
+               color="User Type")
+
+# Graph Theme
+
+graphTh3<-theme(legend.position=c(0.89,0.90))
+                
+# Line chart - Number of trips in 24hours
+
+divvy_tips_2019_2020 %>% group_by(Hour,User_Type) %>%
+  summarise(Total_Rides = n()) %>% 
+  ggplot(mapping = aes(x=Hour, y=Total_Rides, 
+                       group=User_Type, color=User_Type))+
+  geom_line()+ scale_y_continuous(label = scales::comma)+
+  scale_color_manual(values=c("blue", "orangered"))+
+  scale_size_manual(values=c(1.5, 1.5))+
+  graphM3 +
+  graphTh1 +
+  graphTh3
+```
+
+##### Members
+
+1. The number of trips increases sharply from 4 to 7:30 am and deceased from 7:30 to 10 am.
+2. Further, the number of trips slightly increased to noon and decreased till 2 pm.
+3. After 3 pm, a sharp increase in the number of trips is observed till 6 pm.
+
+##### Not Members
+
+1. The number of trips gradually increases from 6 am until 5 pm. The number of trips drops after 5 pm.
+2. Compared with the Member group, the number of trips of the non-member group is significantly lowered from 4 am to 10 pm.
+
+#### Total Trips in Minutes in 24 hours
+
+```{r}
+# Graph labeling
+
+graphM4<-  labs(title="Total Trips in Minutes in 24 hours",
+                subtitle = "Comparision between members and non-members",
+                caption = "Data from 2019_Q2 to 2020_Q1",
+                x= "Hour",
+                y ="Total Trips in Minutes",
+                color="User Type")
+
+# Line chart - Total Trips in Minutes in 24 hours
+
+divvy_tips_2019_2020 %>% 
+  group_by(Hour, User_Type) %>% 
+  summarise(Total_Trip_Minutes =sum(Ride_Length_min)) %>% 
+  ggplot(mapping = aes(x=Hour, y=Total_Trip_Minutes,
+                       group=User_Type, color=User_Type))+
+  geom_line()+ 
+  scale_y_continuous(label = scales::comma)+
+  scale_color_manual(values = c("blue","orangered"))+
+  scale_size_manual(values=c(1.5, 1.5))+
+  graphM4+
+  graphTh1+
+  graphTh3
+```
+
+##### Members
+
+1. The total number of trips and the pattern of full trips minutes in 24 hours are identical.
+
+##### Not Members
+
+1. Similarly, the total number of trips and full trips in 24 hours are identical.
+2. However, the total minutes of trips utilized by a non-member are higher from 10 am to 3 pm than the member.
+3. Based on the study, we could say that most of the members are likely from employee groups working in shifts.
+
+
+#### Mean Trip Minutes in 24 hours
+
+```{r}
+# Graph labeling
+
+graphM5<-  labs(title="Mean Trip Minutes in 24 hours",
+                subtitle = "Comparision between members and non-members",
+                caption = "Data from 2019_Q2 to 2020_Q1",
+                x= "Hour",
+                y ="AVG  Trips in Minutes",
+                color="User Type")
+
+
+# Line chart - Mean Trip Minutes in 24 hours
+
+divvy_tips_2019_2020 %>% 
+  group_by(Hour, User_Type) %>% 
+  summarise(AVG_Trip_Minutes =mean(Ride_Length_min)) %>% 
+  ggplot(mapping = aes(x=Hour, y=AVG_Trip_Minutes,
+                       group=User_Type, color=User_Type))+
+  geom_line()+ scale_color_manual(values = c("blue","orangered"))+
+  scale_size_manual(values=c(1.5, 1.5))+
+  graphM5+
+  graphTh1+
+  graphTh3
+```
+
+##### Members
+
+1. Mean trip time of member is in range of approximately from 9 to 11 thought the day.
+
+##### Not Members
+
+1. The mean trip time of non-member is deceased from 12 midnight to 6 am.
+2. The sharp increase in mean trip time is observed after 7 am till 11 am. It remains steady till 2 pm and gradually decreases till 10 pm and slight increases after 10 pm.
+3. Overall, mean trip time is higher by approximately two times with non-members compared with members.
+We will further deep-dive on the number of trips at various stations between members and non-members.
+
+#### Number of Trips in Weekdays
+
+```{r}
+# Graph labeling
+
+graphM6<-  labs(title="Number of Trips in Weekdays",
+                subtitle = "Comparision between members and non-members",
+                caption = "Data from 2019_Q2 to 2020_Q1",
+                x= "Hour",
+                y ="Number of Trips",
+                fill="User Type")
+# Graph Theme
+
+graphTh3<-theme(legend.position=c(0.93,0.90))
+
+# stacked bar chart - Number of Trips in Weekdays
+
+divvy_tips_2019_2020 %>% 
+  group_by(Day_Name,User_Type) %>% 
+  summarise(Total_rides_wk=n()) %>% 
+  ggplot(mapping = aes(x=Day_Name, y=Total_rides_wk,
+                       fill=User_Type))+
+  geom_bar(stat = "identity")+ 
+  scale_y_continuous(label = scales::comma)+
+  scale_fill_manual(values = c("blue","orangered"))+
+  geom_text(aes(label = paste0(comma(round(Total_rides_wk,2)))),
+            position = position_stack(vjust = .5),
+            size=4,color="white", fontface="bold")+
+  graphM6+
+  graphTh1+
+  graphTh3
+```
+
+##### Members
+
+1. The number of trips was reduced by approximately more than half from members on weekends compared to Monday to Friday.
+2. The number of members’ trips was increased from Monday, reached optimum on Wednesday, and slightly decreased from Wednesday.
+
+##### Not Members
+
+3. The number of trips was approximately 1.5 to 2.0 times higher on weekends than Monday-Friday.
+4. The number of non-members’ trips was higher on Friday followed by Monday other than weekends.
+
+#### Total Trips in Minutes in Weekdays
+
+```{r}
+# Graph labeling
+
+graphM7<-  labs(title="Total Trips in Minutes in Weekdays",
+                subtitle = "Comparision between members and non-members",
+                caption = "Data from 2019_Q2 to 2020_Q1",
+                x= "Weekdays",
+                y ="Total Trips in Minutes",
+                fill="User Type")
+
+# Graph Theme
+
+graphTh4<-theme(legend.position=c(0.73,0.94))
+
+# stacked bar chart - Total Trips Minutes in Weekdays
+
+divvy_tips_2019_2020 %>% 
+  group_by(Day_Name, User_Type) %>% 
+  summarise(Total_trips_min_wkd =sum(Ride_Length_min)) %>% 
+  ggplot(mapping=aes(x=Day_Name,y=Total_trips_min_wkd, fill=User_Type))+
+  geom_bar(stat="identity")+
+  scale_y_continuous(labels=scales::comma)+
+  scale_fill_manual(values=c("blue","orangered"))+
+  geom_text(aes(label = paste0(comma(round(Total_trips_min_wkd ,2)))),
+          position = position_stack(vjust = .5),
+          size=4,color="white",fontface="bold")+
+  graphM7+
+  graphTh1+
+  graphTh4
+```
+
+##### Members
+
+1. The maximum number of trips in minutes was higher on Tuesday and reduced gradually after Tuesday.
+2. The lowest was on Sunday followed by Saturday.
+
+##### Not Members
+1. The maximum number of trips in minutes was higher on Saturday, followed by Sunday and Friday.
+2. The trip utilization was observed higher on Friday, Saturday, and Sunday.
+
+#### Mean Trip Minutes in Weekdays
+
+```{r}
+# Graph labeling
+
+graphM8<-labs(title="Mean Trip Minutes in Weekdays",
+              subtitle = "Comparision between members and non-members",
+              caption = "Data from 2019_Q2 to 2020_Q1",
+              x= "Weekdays",
+              y ="AVG Trip in Minutes",
+              fill="User Type")
+
+# Graph Theme
+
+graphTh4<-theme(legend.position=c(0.53,0.94))
+
+# stacked bar chart - Mean Trip Minutes in Weekdays
+
+divvy_tips_2019_2020 %>% 
+  group_by(Day_Name,User_Type) %>% 
+  summarise(AVG_Trip_Min_wkd=mean(Ride_Length_min)) %>% 
+  ggplot(mapping = aes(x=Day_Name, y=AVG_Trip_Min_wkd,
+                       fill=User_Type))+
+  geom_bar(stat = "identity")+
+  scale_fill_manual(values = c("blue","orangered"))+
+  geom_text(aes(label= paste0(round(AVG_Trip_Min_wkd,2))),
+            position = position_stack(vjust = 0.5),
+            size=4,color="white")+
+  graphM8 +
+  graphTh1+
+  graphTh4
+```
+
+##### Members
+
+1. The mean trip in minutes is approximately two times lower than non-members.
+2. Though the number of trips lowered on weekends, the average trips time is approximately higher by 1 minute.
+
+##### Not Members
+
+1. The mean trip in minutes is higher on Saturday and Sunday, followed by Monday and Friday.
+2. Though the number of trips lowered compared with members, the average trip time in minutes is two times higher.
+
+#### Number of Trips in Year-Month-Quarter
+
+We created a Year-Month-Quarter column by
+
+1. Multiplying the year column by 100 and the month number column.
+2. Combine it with the quarter number by using the "_" sign.
+
+```{r}
+# Create Year-Month Column
+
+divvy_tips_2019_2020$Year_Month<-divvy_tips_2019_2020$Year*100+divvy_tips_2019_2020$Month_Number
+
+# Check unqiue value of Year-Month Column and sort them
+
+sort(unique(divvy_tips_2019_2020$Year_Month))
+```
+
+```{r}
+# Create Year-Month_ Quarter Column
+
+divvy_tips_2019_2020$Year_Month_Quarter<-paste0(divvy_tips_2019_2020$Year_Month,divvy_tips_2019_2020$quarter_Number)
+
+# Check unqiue value of Year-Month Column and sort them
+
+sort(unique(divvy_tips_2019_2020$Year_Month_Quarter))
+```
+
+```{r}
+
+# Graph labeling
+
+graphM9<- labs(title="Number of Trips in Year-Month-Quarter",
+               subtitle = "Comparision between members and non-members",
+               caption = "Data from 2019_Q2 to 2020_Q1",
+               x= "Year-Month-Quarter",
+               y ="Totall Number of Trips",
+               color="User Type")
+
+# Graph Theme
+graphTh5<-theme(legend.position=c(0.90,0.90),
+                axis.text.x=element_text(size=8,face="bold",
+                                         angle =45))
+
+# Line chart - Number of Trips in Year-Month-Quarter
+
+divvy_tips_2019_2020 %>%
+  group_by(Year_Month_Quarter, User_Type) %>% 
+  summarise(Total_Number_Trips_ymq=n()) %>% 
+  ggplot(mapping = aes(x=Year_Month_Quarter,y=Total_Number_Trips_ymq,
+                       group=User_Type,
+                       color=User_Type))+
+  geom_line()+
+  scale_y_continuous(labels = scales::comma)+
+  scale_color_manual(values = c("blue","orangered"))+
+  scale_size_manual(values=c(1.5, 1.5))+
+  graphM9 +
+  graphTh1 +
+  graphTh5
+```
+
+##### Observation
+
+1. The number of trips for both members and non-members increased from April 2019 and peaked in July 2019.
+2. After Aug 2019, it showed decreasing trend till November. It remained steady till Feb 2020 in the cased of members, and for non-members, it was March 2020.
+3. The trend of non-members was steep declined compared to members. The same pattern in members was observed after Oct 2019, which remained until Nov 2019.
+
+#### Total Trips in Minutes in Year-Month-Quarter
+
+```{r}
+graphM10<-  labs(title="Total Trips in Minutes in Year-Month-Quarter",
+                 subtitle = "Comparision between members and non-members",
+                 caption = "Data from 2019_Q2 to 2020_Q1",
+                 x= "Year-Month-Quarter",
+                 y ="Total Trips in Minutes",
+                 color="User Type")
+
+# Line chart - Total Trips in Minutes in Year-Month-Quarter
+
+divvy_tips_2019_2020 %>% 
+  group_by(Year_Month_Quarter,User_Type) %>% 
+  summarise(Total_Ride_Mins_ymq= sum(Ride_Length_min)) %>% 
+  ggplot(mapping=aes(x=Year_Month_Quarter, y=Total_Ride_Mins_ymq,
+                     group=User_Type,
+                     color=User_Type))+
+  geom_line()+
+  scale_y_continuous(labels = scales::comma)+
+  scale_color_manual(values = c("blue","orangered"))+
+  scale_size_manual(values=c(1.5,1.5))+
+  graphM10+
+  graphTh1 +
+  graphTh5
+```
+
+##### Members
+
+1. A similar pattern for members was observed for total trip time in minutes as we followed the way in the total number of trips.
+2. The trip time minutes reduced gradually from Aug 2019 till the end of September 2019. From September 2019, it was a steep decrease in total trip time till the end of Oct 2019. slightly decreased in whole trip minutes observed from November 2019 and remained steady from February to March 2020.
+
+##### Not Members
+
+1. The total trip time in minutes was crossed to the member from mid-June 2019 and remained picked until the end of July 2019. The total trip time in minutes sharply declined from Aug 2019 until October 2019.
+2. There is a slight increase in the total trip time (minutes) from November- to December 2019. This trip time (minutes) increased again from Feb 2019.
+
+#### Mean Trips in Minutes in Year-Month-Quarter
+
+```{r}
+# Graph labeling
+
+graphM11<-  labs(title="Average Rides in Minutes in Year-Month-Quarter",
+                 subtitle = "Comparision between members and non-members",
+                 caption = "Data from 2019_Q2 to 2020_Q1",
+                 x= "Year-Month-Quarter",
+                 y ="Average Ride in Minutes",
+                 color="User Type")
+
+# Line Chart -  Mean Trips in Minutes in Year-Month-Quarter
+
+divvy_tips_2019_2020 %>% 
+  group_by(Year_Month_Quarter,User_Type) %>% 
+  summarise(AVG_Ride_Min_ymq= mean(Ride_Length_min)) %>% 
+  ggplot(mapping=aes(x=Year_Month_Quarter, y=AVG_Ride_Min_ymq,
+                     group=User_Type,
+                     color=User_Type))+
+  geom_line()+
+  scale_y_continuous(labels = scales::comma)+
+  scale_color_manual(values = c("blue","orangered"))+
+  scale_size_manual(values=c(1.5,1.5))+
+  graphM11 +
+  graphTh1 +
+  graphTh5
+```
+
+##### Members
+
+1. Mean ride time (minutes) increases from April 2019 until September 2019. It remained steady from October 2019 till February 2020.
+The mean trip time (minutes) is slightly raised from mid-Feb 2020.
+
+##### Not Members
+
+1. The mean ride time (minutes) slightly decreases from April 2019 until the mid of July 2019. The mean ride time reduction was comparatively higher from August 2019 until October 2019.
+2. The mean ride time increased in November 2019, decreased in December 2019, and raised from January 2020 onward.
+
+#### Number of Trips From Start Station
+
+```{r}
+# Graph labeling
+
+graphM12<-  labs(title="Number of Trips From Start Station",
+                 subtitle = "Comparision between members and non-members",
+                 caption = "Data from 2019_Q2 to 2020_Q1",
+                 x= "Start Station ID",
+                 y ="Total Number of Trips",
+                 color="User Type",
+                 alpha="User Type")
+
+# Line Chart -   Number of Trips From Start Station
+
+divvy_tips_2019_2020 %>% 
+  group_by(Start_Station_ID, User_Type, Start_Station_Name) %>% 
+  summarise(Number_of_Trips_sid=n()) %>% 
+  ggplot(aes(x=Start_Station_ID, y=Number_of_Trips_sid,
+                 group=User_Type,
+                color=User_Type,
+                alpha=User_Type)) + 
+  geom_point(size=3)+
+  geom_text_repel(data=divvy_tips_2019_2020 %>% 
+             group_by(Start_Station_ID, User_Type, Start_Station_Name) %>%
+             summarise(Number_of_Trips_sid=n()) %>%
+             filter(User_Type=="Not Member", Number_of_Trips_sid>15000), # Filter data first
+             aes(label=paste0(Start_Station_ID, " - ", Start_Station_Name)),
+                 size=3, vjust=1.2, hjust=1.2, fontface ="bold",
+                 arrow = arrow(length = unit(0.01, "npc")), box.padding = 1)+
+  geom_hline(yintercept=15000,
+             linetype="dashed", color = "orangered", size=1.0)+
+  scale_y_continuous(labels = scales::comma)+
+  scale_color_manual(values = c("blue","orangered"))+
+  graphM12+
+  graphTh1 + theme(legend.position=c(0.90,0.90),
+                axis.text.x=element_text(size=8,face="bold"))
+```
+
+##### Not Members
+
+The number of trips from non-members was higher than 15,000 trips at start station ID number [Name]:
+
+1. 35-[Streeter Dr & Grand Ave];
+2. 76-[Lake Shore Dr & Monroe St];
+3. 90-[Millennium Park];
+4. 85-[Michigan Ave & Oak St];
+5. 3 -[Shedd Aquarium]; and
+6. 268-[Lake Shore Dr & North Blvd]
+
+Total trips "Not Members" were also higher when compared with the members at these station.
+
+#### Total Trip in Minutes From Start Station
+
+```{r}
+# Graph labeling
+
+graphM13<-  labs(title="Total Trip in Minutes From Start Station",
+                 subtitle = "Comparision between members and non-members",
+                 caption = "Data from 2019_Q2 to 2020_Q1",
+                 x= "Start Station ID",
+                 y ="Total Tips in Minutes",
+                 color="User Type",
+                 alpha="User Type")
+
+
+# Line Chart -   Number of Trips From Start Station
+
+divvy_tips_2019_2020 %>% group_by(Start_Station_ID,User_Type,Start_Station_Name) %>% 
+  summarise(Total_trip_Min_sid=sum(Ride_Length_min)) %>% 
+  ggplot(aes(x=Start_Station_ID,y=Total_trip_Min_sid,
+      group=User_Type,
+      color=User_Type,
+      alpha=User_Type))+
+  geom_point(size=3)+
+  geom_hline(yintercept = 500000,linetype="dashed", 
+             color = "orangered", size=1.0)+
+  geom_text_repel(data=divvy_tips_2019_2020 %>% 
+                    group_by(Start_Station_ID,User_Type,Start_Station_Name) %>% 
+                    summarise(Total_trip_Min_sid=sum(Ride_Length_min)) %>% 
+                    filter(User_Type=="Not Member", Total_trip_Min_sid>500000),
+                  mapping = aes(x=Start_Station_ID, 
+                                y=Total_trip_Min_sid,
+                                label=paste0(Start_Station_ID," - ", Start_Station_Name)), 
+                  size=3, vjust=0.8, hjust=1.2, fontface ="bold",
+                 arrow = arrow(length = unit(0.01, "npc")), box.padding = 1)+
+  scale_y_continuous(labels = scales::comma)+
+  scale_color_manual(values = c("blue","orangered"))+
+  graphM13+
+  graphTh1 + theme(legend.position=c(0.90,0.90),
+                axis.text.x=element_text(size=8,face="bold"))
+```
+
+##### Not Members
+
+The total minutes trips from non-members was higher than 500,000 minutes at start station ID number [Name]:
+
+1. 35 -[Streeter Dr & Grand Ave];
+2. 76 -[Lake Shore Dr & Monroe St];
+3.90 -[Millennium Park];
+4. 85 -[Michigan Ave & Oak St];
+5. 3 -[Shedd Aquarium]; and
+6. 268-[Lake Shore Dr & North Blvd]
+
+Total minitues "Not Members" were also higher when compared with the members at these stations.
+
+#### Concusion and reccomndation
+
+To increase the number of rides for short, long duration and encourage the non-member into a membership program. These are:
+
+1. Members observed two picks from 6 am to 7 am and 3 pm to 5 pm. Most of the members are employees used for their respective office or factory commute. The rides time is concise duration, and the non-member used rides from 9 am to 5 pm. The mean ride is higher, indicating that the non-members use the ride for a more extended period than members.
+
+2. We could encourage non-members for shorter rides by giving a discount or coupon through the membership program.
+
+3. Members take lesser rides during the weekend than on weekdays. We could encourage the members to ride during the weekend with the family package for longer duration rides. Alternatively, we can also give either a discount or promotion to the members on weekends for a short duration.
+
+4. June and July are the picks in the rides for both members and non-members. June and July periods are for summer vacations. We need to have discounts and promotions for this specific period to increase the trips and convert the non-member into a membership program.
+
+5. November and December are Christmas time and rides increase for non-members discount or promotion package is an excellent idea to increase the rides.
+
+6. The trips rides from non-members are larger from station id [Name];
+
+   1. 35-[Streeter Dr & Grand Ave],
+   2. 76-[Lake Shore Dr & Monroe St],
+   3. 85-[Michigan Ave & Oak St],
+   4. 90-[Millennium Park],
+   5. 3-[Shedd Aquarium], and
+   6. 268-[Lake Shore Dr & North Blvd].
+
+The marketing team must focus on these stations to bring a non-member to membership and more promotions.
+
+Note: Data was analyzed using R code and Excel PowerPoint. The Excel Power PowerPoint analysis file and ppt deck are attached to the data file. Thank you for your time to look into this analysis and report
